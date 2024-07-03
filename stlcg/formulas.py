@@ -148,7 +148,7 @@ class Maxish(torch.nn.Module):
         super(Maxish, self).__init__()
         self.input_name = name
 
-    def forward(self, x, scale, dim=1, keepdim=True, distributed=False, agm=False):
+    def forward(self, x, scale, dim=1, keepdim=True, distributed=False, agm=False, gmsr=False, eps=1e-6, p=2, weights=None):
         """"
         Forward pass of the maxish function
 
@@ -159,6 +159,10 @@ class Maxish(torch.nn.Module):
         keepdim     --- boolean to indicate wheterh to keep the dimension of the input tensor, or reduce it. Default: True
         distributed --- boolean to account for the case when there are multiple max values. Default: False
         agm         --- (under construction, arithmetic-geometric mean robustness metric: https://arxiv.org/pdf/1903.05186.pdf)
+        gmsr        --- boolean to use the generalized mean-based smooth robustness function. Default: False
+        eps         --- small positive constant used for numerical stability in gmsr_and
+        p           --- integer parameter that influences the calculation of the gmsr_and
+        weights     --- tensor of weights for the gmsr functions. Default: None
 
         Note on the distributed argument: In cases where there are multiple max values, PyTorch's max function (randomly?) selects one of the max values only, therefore gradients will only pass through that entry only. In cases where we want gradients to flow through all the max entries, (set distributed=True), then the max is computed by averaging over the max values to "spread" the gradients equally.
 
@@ -168,6 +172,10 @@ class Maxish(torch.nn.Module):
             assert x.value is not None, "Input Expression does not have numerical values"
             x = x.value
         if scale > 0:
+            if gmsr:
+                if weights is None:
+                    weights = torch.ones_like(x)
+                return gmsr_or(eps, p, weights, x)
             if agm == True:
                 """ (under construction) """
                 if torch.gt(x, 0).any():
@@ -209,7 +217,7 @@ class Minish(torch.nn.Module):
         super(Minish, self).__init__()
         self.input_name = name
 
-    def forward(self, x, scale, dim=1, keepdim=True, agm=False, distributed=False):
+    def forward(self, x, scale, dim=1, keepdim=True, agm=False, distributed=False, gmsr=False, eps=1e-6, p=2, weights=None):
         """"
         Forward pass of the minish function
 
@@ -220,6 +228,10 @@ class Minish(torch.nn.Module):
         keepdim     --- boolean to indicate wheterh to keep the dimension of the input tensor, or reduce it. Default: True
         distributed --- boolean to account for the case when there are multiple min values. Default: False
         agm         --- (under construction, arithmetic-geometric mean robustness metric: https://arxiv.org/pdf/1903.05186.pdf)
+        gmsr        --- boolean to use the generalized mean-based smooth robustness function. Default: False
+        eps         --- small positive constant used for numerical stability in gmsr_and
+        p           --- integer parameter that influences the calculation of the gmsr_and
+        weights     --- tensor of weights for the gmsr functions. Default: None
 
         Note on the distributed argument: In cases where there are multiple min values, PyTorch's min function (randomly?) selects one of the min values only, therefore gradients will only pass through that entry only. In cases where we want gradients to flow through all the min entries, (set distributed=True), then the min is computed by averaging over the min values to "spread" the gradients equally.
 
@@ -230,6 +242,10 @@ class Minish(torch.nn.Module):
             x = x.value
 
         if scale > 0:
+            if gmsr:
+                if weights is None:
+                    weights = torch.ones_like(x)
+                return gmsr_and(eps, p, weights, x)
             if agm == True:
                 """ (under construction) """
                 if torch.gt(x, 0).all():
@@ -955,7 +971,7 @@ class Until(STL_Formula):
             return maxish(
                             minish(torch.stack([LHS, RHS], dim=-1), scale=scale, dim=-1, keepdim=False, agm=agm, distributed=distributed),
                         scale=scale, dim=-1, keepdim=False, agm=agm, distributed=distributed)
-        elif interval[1] < np.Inf:  # [a, b] where b < ∞
+        elif interval[1] < np.inf:  # [a, b] where b < ∞
             a = int(interval[0])
             b = int(interval[1])
             RHS = [torch.ones_like(trace1)[:,:b,:] * -LARGE_NUMBER]
@@ -1028,7 +1044,7 @@ class Then(STL_Formula):
             return maxish(
                             minish(torch.stack([LHS, RHS], dim=-1), scale=scale, dim=-1, keepdim=False, agm=agm, distributed=distributed),
                         scale=scale, dim=-1, keepdim=False, agm=agm, distributed=distributed)
-        elif interval[1] < np.Inf:  # [a, b] where b < ∞
+        elif interval[1] < np.inf:  # [a, b] where b < ∞
             a = int(interval[0])
             b = int(interval[1])
             RHS = [torch.ones_like(trace1)[:,:b,:] * -LARGE_NUMBER]
