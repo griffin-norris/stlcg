@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import warnings
 warnings.simplefilter("default")
+import typing
 
 '''
 Important information:
@@ -60,6 +61,84 @@ def convert_to_input_values(inputs):
 
     return (x_ret, y_ret)
 
+def gmsr_and(eps: float, p: int, weights: torch.Tensor, *args: typing.Any) -> typing.Any:
+    """
+    Computes the generalized mean-based smooth robustness (GMSR) measure for a logical AND operation
+    based on input function values.
+
+    Parameters:
+    eps (float): A small positive constant used for numerical stability.
+    p (int): An integer parameter that influences the calculation of the GMSR.
+    weights (torch.Tensor): A tensor of weights for the input function values.
+    args (typing.Any): The values of the functions to be combined using the AND operation.
+
+    Returns:
+    The GMSR value of the AND operation.
+    """
+
+    # Number of functions
+    fcn_vals = args[0]
+
+    # Split indices into positive and non-positive values
+    pos_idx = fcn_vals > 0.0
+    neg_idx = fcn_vals <= 0.0
+
+    # Extract values and weights for positive and non-positive indices
+    pos_vals = fcn_vals[pos_idx]
+    neg_vals = fcn_vals[neg_idx]
+    pos_w = weights[pos_idx]
+    neg_w = weights[neg_idx]
+
+    # Sum of all weights
+    sum_w = weights.sum()
+
+    # If there exists a negative element
+    if neg_vals.numel() > 0:
+        # Function value calculation
+        sums = 0.0
+        sums = torch.sum(neg_w * (neg_vals ** (2 * p)))
+        Mp = (eps**p + (sums / sum_w)) ** (1 / p)
+        h_and = eps**0.5 - Mp**0.5
+
+    # If all values are positive
+    else:
+        # Function value calculation
+        mult = 1.0
+        mult = torch.prod(pos_vals ** (2 * pos_w))
+        M0 = (eps**sum_w + mult) ** (1 / sum_w)
+        h_and = M0**0.5 - eps**0.5
+    
+    # Manually reshape into 3d tensor
+    return h_and.view(1, 1, 1)
+
+def gmsr_or(
+    eps: float,
+    p: int,
+    weights: torch.Tensor,
+    *args: typing.Any,
+) -> typing.Any:
+    """
+    Computes the generalized mean-based smooth robustness (GMSR) measure for a logical OR operation
+    based on input function values and their gradients.
+
+    Parameters:
+    eps (float): A small positive constant used for numerical stability.
+    p (int): An integer parameter that influences the calculation of the GMSR.
+    weights (torch.Tensor): An array of weights for the input function values.
+    args (typing.Any): The values of the functions to be combined using the OR operation.
+
+    Returns:
+    typing.Any: The GMSR value of the OR operation.
+    """
+
+    # Negate the function values
+    args = -args
+
+    # Use the gmsr_and function to compute the GMSR value for the negated values
+    h_mor = gmsr_and(eps, p, weights, args)
+
+    # Return the negated GMSR value
+    return -h_mor
 
 class Maxish(torch.nn.Module):
     '''
