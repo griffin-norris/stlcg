@@ -61,7 +61,7 @@ def convert_to_input_values(inputs):
 
     return (x_ret, y_ret)
 
-def gmsr_and(eps: float, p: int, weights: torch.Tensor, *args: typing.Any) -> typing.Any:
+def gmsr_min(eps: float, p: int, weights: torch.Tensor, *args: typing.Any) -> typing.Any:
     """
     Computes the generalized mean-based smooth robustness (GMSR) measure for a logical AND operation
     based on input function values.
@@ -111,7 +111,7 @@ def gmsr_and(eps: float, p: int, weights: torch.Tensor, *args: typing.Any) -> ty
     # Manually reshape into 3d tensor
     return h_and.view(1, 1, 1)
 
-def gmsr_or(
+def gmsr_max(
     eps: float,
     p: int,
     weights: torch.Tensor,
@@ -134,8 +134,8 @@ def gmsr_or(
     # Negate the function values
     args = -args
 
-    # Use the gmsr_and function to compute the GMSR value for the negated values
-    h_mor = gmsr_and(eps, p, weights, args)
+    # Use the gmsr_min function to compute the GMSR value for the negated values
+    h_mor = gmsr_min(eps, p, weights, args)
 
     # Return the negated GMSR value
     return -h_mor
@@ -175,7 +175,7 @@ class Maxish(torch.nn.Module):
             if gmsr:
                 if weights is None:
                     weights = torch.ones_like(x)
-                return gmsr_or(eps, p, weights, x)
+                return gmsr_max(eps, p, weights, x)
             if agm == True:
                 """ (under construction) """
                 if torch.gt(x, 0).any():
@@ -245,7 +245,7 @@ class Minish(torch.nn.Module):
             if gmsr:
                 if weights is None:
                     weights = torch.ones_like(x)
-                return gmsr_and(eps, p, weights, x)
+                return gmsr_min(eps, p, weights, x)
             if agm == True:
                 """ (under construction) """
                 if torch.gt(x, 0).all():
